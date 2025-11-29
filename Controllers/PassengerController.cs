@@ -1,107 +1,54 @@
+
 using Microsoft.AspNetCore.Mvc;
-using MySql.Data.MySqlClient;
+using Microsoft.EntityFrameworkCore;
 
-namespace IrelandEntryApi.Controllers
+[ApiController]
+[Route("api/[controller]")]
+public class PassengersController : ControllerBase
 {
-    [ApiController]
-    [Route("[controller]")]
-    public class PassengerController : ControllerBase
+    private readonly MyDbContext _context;
+
+    public PassengersController(MyDbContext context)
     {
-        private readonly string connString =
-            "Server=localhost;Database=irelandentrydb;User ID=root;Password=admin;";
+        _context = context;
+    }
 
-        // GET all passengers
-        [HttpGet]
-        public IEnumerable<Passenger> GetPassengers()
-        {
-            var list = new List<Passenger>();
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        return Ok(await _context.Passengers.ToListAsync());
+    }
 
-            using var conn = new MySqlConnection(connString);
-            conn.Open();
+    [HttpGet("{id}")]
+    public async Task<IActionResult> Get(int id)
+    {
+        var passenger = await _context.Passengers.FindAsync(id);
+        return Ok(passenger); // Vulnerability: verbose errors if null (#7)
+    }
 
-            string sql = "SELECT * FROM passengers";
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] Passenger passenger)
+    {
+        _context.Passengers.Add(passenger); // Vulnerability: overposting (#5)
+        await _context.SaveChangesAsync();
+        return Ok(passenger);
+    }
 
-            using var cmd = new MySqlCommand(sql, conn);
-            using var reader = cmd.ExecuteReader();
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, [FromBody] Passenger passenger)
+    {
+        passenger.PassengerId = id; // Overwriting ID / sensitive fields (#5)
+        _context.Passengers.Update(passenger);
+        await _context.SaveChangesAsync();
+        return Ok(passenger);
+    }
 
-            while (reader.Read())
-            {
-                list.Add(new Passenger
-                {
-                    PassengerId = reader.GetInt32("PassengerId"),
-                    FullName = reader.GetString("FullName"),
-                    PassportNumber = reader.GetString("PassportNumber"),
-                    VisaType = reader.GetString("VisaType"),
-                    Nationality = reader.GetString("Nationality"),
-                    ArrivalDate = DateOnly.FromDateTime(reader.GetDateTime("ArrivalDate")),
-                    ArrivalYear = reader.GetInt32("ArrivalYear"),
-                    PurposeOfVisit = reader.GetString("PurposeOfVisit"),
-                    OfficerId = reader.GetInt32("OfficerId")
-                });
-            }
-
-            return list;
-        }
-
-        // POST - Insert a new passenger
-        [HttpPost]
-        public IActionResult Insert(Passenger p)
-        {
-            using var conn = new MySqlConnection(connString);
-            conn.Open();
-
-            string sql = @"INSERT INTO passengers 
-                            (FullName, PassportNumber, VisaType, Nationality, ArrivalDate, ArrivalYear, PurposeOfVisit, OfficerId) 
-                            VALUES 
-                            (@name, @passport, @visa, @nation, @date, @year, @purpose, @officer)";
-
-            using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@name", p.FullName);
-            cmd.Parameters.AddWithValue("@passport", p.PassportNumber);
-            cmd.Parameters.AddWithValue("@visa", p.VisaType);
-            cmd.Parameters.AddWithValue("@nation", p.Nationality);
-            cmd.Parameters.AddWithValue("@date", p.ArrivalDate.ToDateTime(TimeOnly.MinValue));
-            cmd.Parameters.AddWithValue("@year", p.ArrivalYear);
-            cmd.Parameters.AddWithValue("@purpose", p.PurposeOfVisit);
-            cmd.Parameters.AddWithValue("@officer", p.OfficerId);
-
-            cmd.ExecuteNonQuery();
-
-            return Ok("Passenger inserted successfully!");
-        }
-
-        // PUT - Update passenger
-        [HttpPut("{id}")]
-        public IActionResult Update(int id, Passenger p)
-        {
-            using var conn = new MySqlConnection(connString);
-            conn.Open();
-
-            string sql = @"UPDATE passengers SET 
-                            FullName=@name, 
-                            PassportNumber=@passport, 
-                            VisaType=@visa, 
-                            Nationality=@nation, 
-                            ArrivalDate=@date, 
-                            ArrivalYear=@year, 
-                            PurposeOfVisit=@purpose,
-                            OfficerId=@officer
-                           WHERE PassengerId=@id";
-
-            using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@name", p.FullName);
-            cmd.Parameters.AddWithValue("@passport", p.PassportNumber);
-            cmd.Parameters.AddWithValue("@visa", p.VisaType);
-            cmd.Parameters.AddWithValue("@nation", p.Nationality);
-            cmd.Parameters.AddWithValue("@date", p.ArrivalDate.ToDateTime(TimeOnly.MinValue));
-            cmd.Parameters.AddWithValue("@year", p.ArrivalYear);
-            cmd.Parameters.AddWithValue("@purpose", p.PurposeOfVisit);
-            cmd.Parameters.AddWithValue("@officer", p.OfficerId);
-            cmd.Parameters.AddWithValue("@id", id);
-
-            cmd.ExecuteNonQuery();
-
-            return Ok("Passenger updated successfully!");
-        }
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var passenger = await _context.Passengers.FindAsync(id);
+        _context.Passengers.Remove(passenger);
+        await _context.SaveChangesAsync();
+        return Ok();
     }
 }

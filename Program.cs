@@ -1,25 +1,35 @@
+using Microsoft.EntityFrameworkCore;
+// Add this using directive for Pomelo.EntityFrameworkCore.MySql
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
+// Add controllers
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Insecure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("InsecureCORS", cors =>
+    {
+        cors.WithOrigins("http://localhost:4200")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
+// EF Core MySQL connection
+// Register DbContext with MySQL
+builder.Services.AddDbContext<MyDbContext>(options =>
+    options.UseMySql(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))
+    ));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseHttpsRedirection();
-
+// Use CORS
+app.UseCors("InsecureCORS");
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
